@@ -1,0 +1,74 @@
+# This workflow is a slightly adapted version of
+# https://github.com/JuliaPluto/static-export-template
+# 
+
+name: export Pluto notebooks to GitHub Pages
+
+# run only when manually triggered
+on:
+  workflow_dispatch:
+
+# when two jobs run in parallel, cancel the older ones to make sure that the website is generated from the most recent commit
+concurrency:
+  group: pluto-export
+  cancel-in-progress: true
+
+# action needs permission to write the exported HTML file to the gh-pages branch
+permissions:
+  contents: write
+
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout this repository
+        uses: actions/checkout@v4
+
+      - name: install Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1" # this will pick the latest Julia version
+
+      - name: cache Julia artifacts & such
+        uses: julia-actions/cache@v2
+        with:
+          cache-registries: "true"
+
+      # set up a folder that Pluto can use to cache exported notebooks
+      - name: set up notebook state cache
+        uses: actions/cache@v4
+        with:
+          path: pluto_state_cache
+          key: |
+            ${{ runner.os }}-pluto_state_cache-v2-${{ hashFiles('**/Project.toml', '**/Manifest.toml', '.github/workflows/*' ) }}-${{ hashFiles('**/*jl') }}
+          restore-keys: |
+            ${{ runner.os }}-pluto_state_cache-v2-${{ hashFiles('**/Project.toml', '**/Manifest.toml', '.github/workflows/*' ) }}
+
+      - name: ignore notebook state cache in export
+        run: echo 'pluto_state_cache' >> .gitignore
+
+      - name: run & export Pluto notebooks
+        run: |
+          julia -e 'using Pkg
+            Pkg.activate(mktempdir())
+            Pkg.add([
+              Pkg.PackageSpec(name="PlutoSliderServer", version="1"),
+            ])
+
+            import PlutoSliderServer
+
+            PlutoSliderServer.github_action(".";
+              Export_cache_dir="pluto_state_cache",
+              Export_baked_notebookfile=false,
+              Export_baked_state=false,
+              # more parameters can go here
+            )'
+
+      - name: deploy to gh-pages
+        uses: JamesIves/github-pages-deploy-action@releases/v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gh-pages
+          folder: .
+          single-commit: true
