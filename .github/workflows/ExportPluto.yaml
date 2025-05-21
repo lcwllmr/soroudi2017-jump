@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: checkout this repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
 
       - name: install Julia
         uses: julia-actions/setup-julia@v2
