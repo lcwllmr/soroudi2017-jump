@@ -65,6 +65,16 @@ jobs:
               # more parameters can go here
             )'
 
+      - name: convert readme.md to index.html
+        run: |
+          julia -e '
+            using Markdown
+            raw_md = read("README.md", String)
+            md = Markdown.parse(raw_md)
+            html = sprint(Markdown.HTML, md)
+            write("index.html", html)
+          '
+
       - name: deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@releases/v4
         with:
