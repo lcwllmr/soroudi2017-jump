@@ -1,3 +1,7 @@
+---
+title: lcwllmr/soroudi2017-jump
+---
+
 # soroudi2017-jump
 
 This repo contains Julia/JuMP re-implementations of the code examples from the textbook
