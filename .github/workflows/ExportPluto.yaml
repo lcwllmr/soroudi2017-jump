@@ -53,26 +53,27 @@ jobs:
           julia -e 'using Pkg
             Pkg.activate(mktempdir())
             Pkg.add([
-              Pkg.PackageSpec(name="PlutoSliderServer", version="1"),
+              Pkg.PackageSpec(name="PlutoSliderServer", version="1.3"),
             ])
-
-            import PlutoSliderServer
-
-            PlutoSliderServer.github_action(".";
+            using PlutoSliderServer
+            github_action(".";
               Export_cache_dir="pluto_state_cache",
               Export_baked_notebookfile=false,
               Export_baked_state=false,
-              # more parameters can go here
             )'
 
       - name: convert readme.md to index.html
         run: |
-          julia -e '
-            using Markdown
-            raw_md = read("README.md", String)
-            md = Markdown.parse(raw_md)
-            html = sprint(Markdown.HTML, md)
-            write("index.html", html)
+          julia -e 'using Pkg
+            Pkg.add([
+              Pkg.PackageSpec(name="Weave", version="0.10")
+            ])
+            using Weave
+            weave("./README.md",
+              out_path="./index.html",
+              doctype="md2html",
+              template="./index.template.html",
+              css="./github-markdown-css/github-markdown.css")
           '
 
       - name: deploy to gh-pages
