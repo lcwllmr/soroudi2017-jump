@@ -1,22 +1,26 @@
 # This workflow is a slightly adapted version of
-# https://github.com/JuliaPluto/static-export-template
+#   https://github.com/JuliaPluto/static-export-template
 # 
 
-name: export Pluto notebooks to GitHub Pages
+name: build website
 
-# run only when manually triggered
+# triggered on pushes to main, specifically whenever notebooks or the readme change
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '*.jl'
+      - 'README.md'
 
-# when two jobs run in parallel, cancel the older ones to make sure that the website is generated from the most recent commit
+# when two jobs run in parallel cancel the older ones to make sure that the website is generated from the most recent commit
 concurrency:
-  group: pluto-export
+  group: build-website
   cancel-in-progress: true
 
-# action needs permission to write the exported HTML file to the gh-pages branch
+# action needs permission to write HTML files to the gh-pages branch
 permissions:
   contents: write
-
 
 jobs:
   build-and-deploy:
@@ -25,12 +29,12 @@ jobs:
       - name: checkout this repository
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          submodules: 'recursive' # make sure submodules are pulled, too 
 
-      - name: install Julia
+      - name: install julia
         uses: julia-actions/setup-julia@v2
         with:
-          version: "1" # this will pick the latest Julia version
+          version: "1.11" # this will pick the latest Julia 1.11.x version
 
       - name: cache Julia artifacts & such
         uses: julia-actions/cache@v2
@@ -43,14 +47,14 @@ jobs:
         with:
           path: pluto_state_cache
           key: |
-            ${{ runner.os }}-pluto_state_cache-v2-${{ hashFiles('**/Project.toml', '**/Manifest.toml', '.github/workflows/*' ) }}-${{ hashFiles('**/*jl') }}
+            ${{ runner.os }}-pluto_state_cache-v2-${{ hashFiles('.github/workflows/*' ) }}-${{ hashFiles('*.jl') }}
           restore-keys: |
-            ${{ runner.os }}-pluto_state_cache-v2-${{ hashFiles('**/Project.toml', '**/Manifest.toml', '.github/workflows/*' ) }}
+            ${{ runner.os }}-pluto_state_cache-v2-${{ hashFiles('.github/workflows/*' ) }}
 
       - name: ignore notebook state cache in export
         run: echo 'pluto_state_cache' >> .gitignore
 
-      - name: run & export Pluto notebooks
+      - name: run & export pluto notebooks
         run: |
           julia -e 'using Pkg
             Pkg.activate(mktempdir())
@@ -64,7 +68,7 @@ jobs:
               Export_baked_state=false,
             )'
 
-      - name: convert readme.md to index.html
+      - name: export repo readme as index
         run: |
           julia -e 'using Pkg
             Pkg.add([
@@ -85,3 +89,4 @@ jobs:
           branch: gh-pages
           folder: .
           single-commit: true
+
