@@ -9,11 +9,12 @@ begin
 	using JuMP
 	using Ipopt
 	using Plots
+	using Suppressor
 end;
 
 # ╔═╡ a8238c4a-d6c4-4744-8110-4cb12318b4bc
 md"""
-# Thermal Unit Economic Dispatch
+# Thermal unit economic dispatch
 
 Thermal unit technology transforms fuel-based sources of energy into electricty. The production cost of a thermal unit i is given by
 ```
@@ -21,7 +22,7 @@ C_i  =  a_i * P_i^2  +  b_i * P_i  +  c_i,
 ```
 where the `a_i`, `b_i` and `c_i` are fuel cost coefficients and the `P_i` is the power output variable of unit `i`. The total cost of the system is then simply given by
 ```
-C  =  sum(C_i).
+C  =  sum_i(C_i).
 ```
 
 Our goal will be to minimize this cost subject to the operating limits of the individual generators
@@ -30,7 +31,7 @@ P_i_min <= P_i <= P_i_max,
 ```
 and to the demand or load that the system needs to be able to deliver, that is,
 ```
-sum(P_i) >= L_e.
+sum_i(P_i) >= L_e.
 ```
 """
 
@@ -62,7 +63,7 @@ function SolveEconomicDispatch(L_e, verbose=false)
     @variable(model, P_min[i] <= P[i=1:5] <= P_max[i])
     @objective(model, Min, sum(a[i] * P[i]^2 + b[i] * P[i] + c[i] for i in 1:5))
     @constraint(model, sum(P[i] for i in 1:5) >= L_e)
-    optimize!(model)
+    @suppress_out optimize!(model)
 
     if !is_solved_and_feasible(model)
         throw(ArgumentError("Model is (probably) infeasible."))
@@ -89,7 +90,7 @@ SolveEconomicDispatch(500, true);
 
 # ╔═╡ 47f8fb1e-b16e-482e-ad4c-cd50002a29a7
 md"""
-Now the maximum total load `sum(P_i_max)` should define the upper limit of the feasible region. Let's do this quick sanity check.
+Now the maximum total load `sum_i(P_i_max)` should define the upper limit of the feasible region. Let's do this quick sanity check.
 """
 
 # ╔═╡ e9d4da7f-db80-4d68-a541-d7072253be45
@@ -136,11 +137,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 
 [compat]
 Ipopt = "~1.10.3"
 JuMP = "~1.25.0"
 Plots = "~1.40.13"
+Suppressor = "~0.2.8"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -149,7 +152,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "a2137b4235ef9a365647a86bdaf64ab140aea480"
+project_hash = "a9bb903e32c9aaabb150a567342a13cc01303a1f"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1056,6 +1059,12 @@ version = "1.11.0"
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
+
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6dbb5b635c5437c68c28c2ac9e39b87138f37c0a"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.8"
 
 [[deps.TOML]]
 deps = ["Dates"]
