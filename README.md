@@ -35,4 +35,5 @@ All Pluto notebooks are developed locally and then converted to HTML using the f
   docker run -d -v .:/workspace -p 1234:1234 --name s17jmp s17jmp:latest
   ```
   and open the browser at <http://localhost:1234> to access Pluto's UI and work with the notebooks.
-- To publish the current state to the web, manually trigger the GitHub action to convert all notebooks and this readme to HTML and publish to <https://lcwllmr.github.io/soroudi2017-jump>.
+- After you are happy with the changes, you simply push to `main` and then, if any of the `*.jl` or `README.md` were changed, a GitHub action should be triggered automatically.
+  This will export this readme file and all notebooks as HTML pages and publish them to GitHub pages at <https://lcwllmr.github.io/soroudi2017-jump>.
