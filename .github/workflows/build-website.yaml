@@ -2,10 +2,11 @@
 #   https://github.com/JuliaPluto/static-export-template
 # 
 
-name: build website
+name: build-website-html
 
-# triggered on pushes to main, specifically whenever notebooks or the readme change
+# triggered on pushes to main (specifically whenever notebooks or the readme change) and manual triggers
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -15,7 +16,7 @@ on:
 
 # when two jobs run in parallel cancel the older ones to make sure that the website is generated from the most recent commit
 concurrency:
-  group: build-website
+  group: build-website-html
   cancel-in-progress: true
 
 # action needs permission to write HTML files to the gh-pages branch
