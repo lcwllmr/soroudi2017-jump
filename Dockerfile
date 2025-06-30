@@ -1,5 +1,5 @@
-FROM julia:1.11-bookworm
-RUN julia -e 'import Pkg; Pkg.add([Pkg.PackageSpec(name="Pluto", version="0.20")]);'
+FROM julia:1.11.5-bookworm
+RUN julia -e 'import Pkg; Pkg.add([Pkg.PackageSpec(name="Pluto", version="0.20.13")]);'
 WORKDIR /workspace
 VOLUME /workspace
 EXPOSE 1234
