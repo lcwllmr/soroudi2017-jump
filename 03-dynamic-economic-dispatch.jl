@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.8
+# v0.20.13
 
 using Markdown
 using InteractiveUtils
@@ -9,7 +9,27 @@ begin
 	using JuMP
 	using Ipopt
 	using Plots
+	using Suppressor
 end;
+
+# ╔═╡ 7694a499-84ac-4d60-9667-33dcf3a973ed
+md"""
+# Dynamic economic dispatch
+
+We now consider the problem of optimizing cost over period of time with varying demands - here, a full day of 24 hours.
+The optimization variables are the power outputs of the generators but now at each time point, and the previous constraints are easily generalized to this new settings.
+However, we also need to take into consideration that a given generator has a limits on both how much they can ramp up or down their power output per hour.
+This leads to additional constraints of the form
+```
+P[i,t-1] - P[i,t] <= RD[i]
+```
+for the ramp-down rate limits and similarly for the ramp-up ones.
+"""
+
+# ╔═╡ 2aeee52e-5dcc-4e4c-b778-7b8f85e54daa
+md"""
+The new parameters in this setting are said ramp-up/ramp-down rate limits and the varying demand over time.
+"""
 
 # ╔═╡ 89162f8c-34c9-11f0-0c62-33f6a61c4dcc
 begin
@@ -24,7 +44,7 @@ begin
 	P_min = [28, 20, 30, 20] # unit: MW
 	P_max = [200, 290, 190, 260]; # unit: MW
 
-	### NEW: ramp-up and ramp-down costs
+	### NEW: ramp-up and ramp-down rate limits
 	RU = [40, 30, 30, 50] # unit: MW
 	RD = [40, 30, 30, 50] # unit: MW
 
@@ -34,6 +54,11 @@ begin
 		754, 700, 686, 720, 714, 761,
 		727, 714, 618, 584, 578, 544] # unit: MW
 end;
+
+# ╔═╡ f6090108-cef4-41af-8c86-7934e35b9f55
+md"""
+To understand the demand, we plot it just to observe that the peak happens during the day and that both rise and decline are quite rapid.
+"""
 
 # ╔═╡ fcce9aaa-7c0b-42b5-ad1e-361f77764bd8
 begin
@@ -69,13 +94,21 @@ end;
 begin
 	model, (P, TC, TE) = MakeCostBasedDEDModel();
 	@objective(model, Min, TC)
-	optimize!(model)
+	@suppress_out optimize!(model)
 
 	plot(1:24, eachrow(value.(P)), 
     	title="Generation levels over time", 
     	xlabel="Time (h)", ylabel="Generated power (MW)", 
     	label=["P1" "P2" "P3" "P4"])
 end
+
+# ╔═╡ 51c6ef7f-720f-472a-94ff-c71e0375fd8a
+md"""
+The given technical rate limits were apparently quite good in the sense that the generators were able to (more or less) replicate the rapid rise/decline of the demand.
+That said, ramping up/down by large amounts will also carry additional costs that we did not consider so far.
+While they won't be visible in the total costs for this model (because we did not do any assumptions on this), they will be reflected in the total emissions.
+It is therefore useful to perform a ramp sensitivity analysis: we gradually scale down the technical maximum ramp rates and see how the model reacts.
+"""
 
 # ╔═╡ 0e2d61aa-1e61-4925-895d-fcbd1896e035
 begin
@@ -89,7 +122,7 @@ begin
 		
 		model, (_, TC, TE) = MakeCostBasedDEDModel(scale);
 		@objective(model, Min, TC)
-		optimize!(model)
+		@suppress_out optimize!(model)
 
 		TC_RS[i] = value(TC)
 		TE_RS[i] = value(TE)
@@ -97,7 +130,20 @@ begin
 end
 
 # ╔═╡ 8ef39681-efec-4790-92c0-900f56701347
-plot(scales, TE_RS ./ 1000)
+plot(scales, TC_RS ./ 1000, xlabel="Ramp limit scale", ylabel="Total cost", legend=false)
+
+# ╔═╡ 728fd37a-e344-484d-8078-f3adff8690ab
+md"""
+As predicted, our model doesn't consider the cost of ramping up and down, so the higher the ramp limits, the better can adapt to the current demand, the lower the loss. But how does it look like for total emissions?
+"""
+
+# ╔═╡ 7e194e90-4e96-463a-8d9e-3556cc8de7a2
+plot(scales, TE_RS ./ 1000, xlabel="Ramp limit scale", ylabel="Total emissions", legend=false)
+
+# ╔═╡ 3d150341-e8f0-49ce-b746-9b38aa1a247d
+md"""
+Indeed, we find a minimum that is considerably lower than using the technical ramp limits.
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -105,11 +151,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 
 [compat]
 Ipopt = "~1.10.3"
 JuMP = "~1.25.0"
 Plots = "~1.40.13"
+Suppressor = "~0.2.8"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -118,7 +166,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "a2137b4235ef9a365647a86bdaf64ab140aea480"
+project_hash = "a9bb903e32c9aaabb150a567342a13cc01303a1f"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1026,6 +1074,12 @@ deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
 
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6dbb5b635c5437c68c28c2ac9e39b87138f37c0a"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.8"
+
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -1383,12 +1437,19 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─7694a499-84ac-4d60-9667-33dcf3a973ed
 # ╠═961a9d66-ac01-4116-bb23-c374b279be58
+# ╟─2aeee52e-5dcc-4e4c-b778-7b8f85e54daa
 # ╠═89162f8c-34c9-11f0-0c62-33f6a61c4dcc
+# ╟─f6090108-cef4-41af-8c86-7934e35b9f55
 # ╠═fcce9aaa-7c0b-42b5-ad1e-361f77764bd8
 # ╠═39d079c9-48fa-467d-84de-ba7ca26b61da
 # ╠═e5e09112-53e0-4ed0-a0cb-27a666214f2d
+# ╟─51c6ef7f-720f-472a-94ff-c71e0375fd8a
 # ╠═0e2d61aa-1e61-4925-895d-fcbd1896e035
 # ╠═8ef39681-efec-4790-92c0-900f56701347
+# ╟─728fd37a-e344-484d-8078-f3adff8690ab
+# ╠═7e194e90-4e96-463a-8d9e-3556cc8de7a2
+# ╟─3d150341-e8f0-49ce-b746-9b38aa1a247d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
