@@ -20,7 +20,7 @@ The links each lead to a rendered web version of the respective notebook.
 2. [Thermal unit environmental dispatch & Pareto optimal front approach](https://lcwllmr.github.io/soroudi2017-jump/02-thermal-unit-environmental-dispatch.html): Section 3.2
 3. [Cost-based dynamic ED (DED) & ramp rate sensitivity analysis](https://lcwllmr.github.io/soroudi2017-jump/03-dynamic-economic-dispatch.html): Section 4.1 introduction and 4.1.1
 4. [Multi-objective cost-emission minimization](https://lcwllmr.github.io/soroudi2017-jump/04-multi-objective-cost-emission-minimization.html): Section 4.1.2
-5. `WIP` [Wind-integrated DED](https://lcwllmr.github.io/soroudi2017-jump/05-wind-integrated-ded.html): Section 4.1.3
+5. [Wind-integrated DED](https://lcwllmr.github.io/soroudi2017-jump/05-wind-integrated-ded.html): Section 4.1.3
 6. `TODO` Energy storage system (ESS) operation in DED: Section 7.2.1
 7. `TODO` ESS operation in wind-integrated DED: Section 7.2.2
 

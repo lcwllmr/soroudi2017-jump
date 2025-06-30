@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.13
 
 using Markdown
 using InteractiveUtils
@@ -9,7 +9,23 @@ begin
 	using JuMP
 	using Ipopt
 	using Plots
+	using Suppressor
 end;
+
+# ╔═╡ 7be465ce-5ae2-4a3f-b15b-9b12678946d7
+md"""
+# Wind-integrated DED
+
+Integrated wind energy into power grids adds a new concept into the mix: since the wind strength at a given time is out of our control, we not only need to make sure we adapt our thermal units accordingly to meet the demand, but also that we have to stop over-production.
+Intentionally reducing the output of wind turbines is called *wind curtailment* and comes with certain costs associated to it.
+
+We introduce two new variable `Pw[t]` and `Pwc[t]` (for wind power and curtailment, respectively), which are both non-negative and add up to the exact amount of wind power available `Wind[t]`.
+The thermal power outputs and the wind power outputs together must meet the demand.
+Lastly, we need to add add all instances of `VWC * Pwc[t]` to the total cost.
+Here, `VWC` refers to the value/cost of wind curtailment per megawatt.
+
+We start from the cost-based dynamic economic dispatch from before and need to add a few new parameters.
+"""
 
 # ╔═╡ 880895f0-3675-11f0-0464-25e87a485c19
 begin
@@ -37,13 +53,30 @@ begin
 	#	39.91, 39.45, 41.14, 39.23, 52.12, 40.85, 
 	#	41.2, 41.15, 45.76, 45.59, 45.56, 34.72] # unit: ???
 
+	# NEW: wind power generation levels over time
 	Wind = [44.1, 48.5, 65.7, 144.9, 202.3, 317.3, 
 		364.4, 317.3, 271.0, 306.9, 424.1, 398.0, 
 		487.6, 521.9, 541.3, 560.0, 486.8, 372.6, 
-		367.4, 314.3, 316.6, 311.4, 405.4, 470.4] # unit: ???
+		367.4, 314.3, 316.6, 311.4, 405.4, 470.4] # unit: MW
 
-	VWC = 50 # unit: ???
+	# NEW: wind curtailment costs
+	VWC = 50 # unit: $/MW
 end;
+
+# ╔═╡ 69455afd-9143-40f3-a861-18c1194c941d
+md"""
+We first plot the maximum available energy from wind together with the current demand in order to see how much thermal energy and how much curtailment is probably necessary.
+"""
+
+# ╔═╡ d9349ed5-a347-447f-9c6a-eb5b80ebb8dd
+plot(1:24, [Wind, L],
+	xlabel="Hour", ylabel="Power (MW)", 
+	label=["Wind" "Demand"])
+
+# ╔═╡ 0a9cd84d-718d-4c80-b11c-6437c5185025
+md"""
+We see that in theory we should never have to use curtailment (if not for adjusting towards ramp-up/down rate limits of the thermal units).
+"""
 
 # ╔═╡ b0dec2f8-39d8-47b5-aa57-cd5a31ae4d16
 function MakeWindIntegratedDEDModel()
@@ -51,18 +84,13 @@ function MakeWindIntegratedDEDModel()
     set_silent(model)
 	set_attribute(model, "print_level", 0)
 
-	# define variables for power production with limits
     @variable(model, P_min[i] <= P[i=1:4, t=1:24] <= P_max[i])
 	@variable(model, 0 <= Pw[t=1:24] <= Wind[t])
 	@variable(model, 0 <= Pwc[t=1:24] <= Wind[t])
 	
-	# units must cover their ramp-up and ramp-down power draws themselves
 	@constraint(model, RUcon[i=1:4, t=2:24], P[i,t] - P[i,t-1] <= RU[i])
-	@constraint(model, RDcon[i=1:4, t=2:24], P[i,t-1] - P[i,t] <= RD[i])
-	
-	# demand must be covered by generation
+	@constraint(model, RDcon[i=1:4, t=2:24], P[i,t-1] - P[i,t] <= RD[i])	
     @constraint(model, Lcon[t=1:24], Pw[t] + sum(P[i,t] for i in 1:4) >= L[t])
-
 	@constraint(model, PWcon[t=1:24], Pw[t] + Pwc[t] == Wind[t])
     
 	TC = sum(a[i] * P[i,t]^2 + b[i] * P[i,t] + c[i] for i in 1:4, t in 1:24)
@@ -75,19 +103,35 @@ end;
 begin
 	model, (P, Pw, Pwc, TC, WC) = MakeWindIntegratedDEDModel()
 	@objective(model, Min, TC + WC)
-	optimize!(model)
+	@suppress_out optimize!(model)
 end
 
-# ╔═╡ 2a37b482-032d-404e-a61a-43fa063c8f81
-value(TC)
+# ╔═╡ 5120b7b0-d2c6-41db-8b19-caed29f187c4
+value(WC)
+
+# ╔═╡ 655fa1bd-de2e-4fc0-af74-daf58bad6193
+md"""
+Indeed, the total wind costs caused by curtailment are zero here.
+Let's inspect the behavior of the thermal units.
+"""
 
 # ╔═╡ 8ec9ec2b-e449-468f-a865-3dc00a8f96e8
-plot(1:24, eachrow(value.(P)))
+plot(1:24, eachrow(value.(P)), 
+	xlabel="Hour", ylabel="Power output", 
+	label=["Unit 1" "Unit 2" "Unit 3" "Unit 4"])
+
+# ╔═╡ 01df8991-a707-4d88-a82f-4dfa1823f99a
+md"""
+This looks right as the curvature of demand and wind curves are always somewhat opposite.
+Finally, let's see how the total power composes from thermal and wind energy.
+"""
 
 # ╔═╡ 4e02568d-f534-4456-bdc4-4c46e7faf127
 begin
 	Pth = sum(value.(P), dims=1)[:]  # NOTE: colon for flattening
-	plot(1:24, eachrow([value.(L), Pth, value.(Pw)]))
+	plot(1:24, eachrow([value.(L), Pth, value.(Pw)]), 
+		xlabel="Hour", ylabel="Power", 
+		label=["Demand" "Thermal power" "Wind power"])
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -96,11 +140,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 
 [compat]
 Ipopt = "~1.10.3"
 JuMP = "~1.25.0"
 Plots = "~1.40.13"
+Suppressor = "~0.2.8"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -109,7 +155,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "a2137b4235ef9a365647a86bdaf64ab140aea480"
+project_hash = "a9bb903e32c9aaabb150a567342a13cc01303a1f"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1017,6 +1063,12 @@ deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
 
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6dbb5b635c5437c68c28c2ac9e39b87138f37c0a"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.8"
+
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -1374,12 +1426,18 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─7be465ce-5ae2-4a3f-b15b-9b12678946d7
 # ╠═282853b8-aea9-4a0d-9962-982fcb57f48b
 # ╠═880895f0-3675-11f0-0464-25e87a485c19
+# ╟─69455afd-9143-40f3-a861-18c1194c941d
+# ╠═d9349ed5-a347-447f-9c6a-eb5b80ebb8dd
+# ╟─0a9cd84d-718d-4c80-b11c-6437c5185025
 # ╠═b0dec2f8-39d8-47b5-aa57-cd5a31ae4d16
 # ╠═ef953c6d-5157-4258-86a3-d0761ff006d3
-# ╠═2a37b482-032d-404e-a61a-43fa063c8f81
+# ╠═5120b7b0-d2c6-41db-8b19-caed29f187c4
+# ╟─655fa1bd-de2e-4fc0-af74-daf58bad6193
 # ╠═8ec9ec2b-e449-468f-a865-3dc00a8f96e8
+# ╟─01df8991-a707-4d88-a82f-4dfa1823f99a
 # ╠═4e02568d-f534-4456-bdc4-4c46e7faf127
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
