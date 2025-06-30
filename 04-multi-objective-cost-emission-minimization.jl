@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.13
 
 using Markdown
 using InteractiveUtils
@@ -9,7 +9,24 @@ begin
 	using JuMP
 	using Ipopt
 	using Plots
+	using Suppressor
 end;
+
+# ╔═╡ ebc5bf7b-3782-4828-a2e1-e6dc74d860e7
+md"""
+# Multi-objective cost-emission minimization
+
+Now we are going to investigate how to minimize both cost and emission simultaneously.
+In the [thermal unit ED notebook](https://lcwllmr.github.io/soroudi2017-jump/02-thermal-unit-environmental-dispatch.html) we had already introduced the Pareto optimal front approach.
+The question we attempt to answer now is how to actually select a point on that front, given that all of the points are optimal in some sense.
+We will use a *fuzzy satisfying method* that will be explained below.
+"""
+
+# ╔═╡ fd176c82-a0af-475c-b45d-5018fa268a5c
+md"""
+First, we compute the Pareto optimal front as we did before in the other notebook.
+There is nothing new here.
+"""
 
 # ╔═╡ 7d73254a-9686-40a1-863f-cf0e7d4fde05
 begin
@@ -24,11 +41,9 @@ begin
 	P_min = [28, 20, 30, 20] # unit: MW
 	P_max = [200, 290, 190, 260]; # unit: MW
 
-	### NEW: ramp-up and ramp-down costs
 	RU = [40, 30, 30, 50] # unit: MW
 	RD = [40, 30, 30, 50] # unit: MW
 
-	### NEW: load/demand per hour over 24 hours
 	L = [510, 530, 516, 510, 515, 544,
 		646, 686, 741, 734, 748, 760,
 		754, 700, 686, 720, 714, 761,
@@ -65,30 +80,29 @@ end;
 begin
 	model_TC_min, (P_TC_min, TC_min, TE_max) = MakeCostBasedDEDModel();
 	@objective(model_TC_min, Min, TC_min)
-	optimize!(model_TC_min)
+	@suppress_out optimize!(model_TC_min)
 
 	model_TE_min, (P_TE_min, TC_max, TE_min) = MakeCostBasedDEDModel();
 	@objective(model_TE_min, Min, TE_min)
-	optimize!(model_TE_min)
+	@suppress_out optimize!(model_TE_min)
 end
 
 # ╔═╡ d3b68954-42f4-45f4-91af-a9248d4c81db
 begin
 	num_points = 11
-	eps = zeros(num_points)
+	epsilons = zeros(num_points)
 	TC_pareto = zeros(num_points)
 	TE_pareto = zeros(num_points)
 	P_pareto = zeros(num_points, 4, 24)
-	mu_TC = zeros(num_points)
-	mu_TE = zeros(num_points)
 
 	for i in 1:num_points
-		eps[i] = value(TE_max) + (value(TE_min) - value(TE_max)) * (i - 1) / (num_points - 1)
+		# scale down total emissions step by step and use as a constraint in the cost-based DED model
+		epsilons[i] = value(TE_max) + (value(TE_min) - value(TE_max)) * (i - 1) / (num_points - 1)
 
 		# compromised model and solutions
-		model_comp, (P_comp, TC_comp, TE_comp) = MakeCostBasedDEDModel(eps[i])
+		model_comp, (P_comp, TC_comp, TE_comp) = MakeCostBasedDEDModel(epsilons[i])
 		@objective(model_comp, Min, TC_comp)
-		optimize!(model_comp)
+		@suppress_out optimize!(model_comp)
 		
 		TC_pareto[i] = value(TC_comp)
 		TE_pareto[i] = value(TE_comp)
@@ -97,27 +111,57 @@ begin
 			P_pareto[i,g,:] = value.(P_comp)[g,:]
 		end
 
-		# apply fuzzy satisfying method to rate the solutions on the Pareto optimal front
 		
-		if value(TC_min) <= value(TC_comp) <= value(TC_max)
-			mu_TC[i] = (value(TC_max) - value(TC_comp)) / (value(TC_max) - value(TC_min))
-		else
-			mu_TC[i] = 0.0
-		end
-
-		if value(TE_min) <= value(TE_comp) <= value(TE_max)
-			mu_TE[i] = (value(TE_max) - value(TE_comp)) / (value(TE_max) - value(TE_min))
-		else
-			mu_TE[i] = 0.0
-		end
 	end
 end
 
 # ╔═╡ fdd0379b-5f81-470e-89e6-f182f1f61523
-plot(TC_pareto, TE_pareto, legend=false)
+plot(TC_pareto, TE_pareto, 
+	 title="Pareto optimal front", legend=false,
+	 xlabel="Cost", ylabel="Emissions")
 
-# ╔═╡ 339f52c5-f4bf-44e3-8533-8d4e53d39b48
-best = argmax(min.(mu_TE, mu_TC))
+# ╔═╡ d92ba439-5a30-4a55-b0b4-1b42c9ce1231
+md"""
+Now the idea of the fuzzy satisfying method is the following:
+To each point in the front we associate two values: `mu_TE` and `mu_TC`, each between 0 and 1.
+These measure the degree of success of the point in optimizing the objective functions of total costs and total emissions, respectively.
+From this point, we will make the conservative choice: the point which maximizes minimum satisfaction over both objective functions.
+
+First, we define how exactly we measure success.
+We choose a simple linear function.
+"""
+
+# ╔═╡ 7a872444-11f0-42f3-b06c-bebe7376dbf2
+function mu(f_min, f_max, f)
+	if f_min <= f <= f_max
+		return (f_max - f) / (f_max - f_min)
+	else
+		return 0.0
+	end
+end;
+
+# ╔═╡ c1a142bd-cfcf-4512-952c-89ab196d78e1
+md"""
+Now we can apply the success function to all points and compute the maximum of the minimum over the total cost and emissions to obtain our final choice.
+"""
+
+# ╔═╡ 1c9b4324-edd4-4864-939b-78cf48489fe6
+begin
+	mu_TC = zeros(num_points)
+	mu_TE = zeros(num_points)
+
+	for i in 1:num_points
+		mu_TC[i] = mu(value(TC_min), value(TC_max), value(TC_pareto[i]))
+		mu_TE[i] = mu(value(TE_min), value(TE_max), value(TE_pareto[i]))
+	end
+
+	best = argmax(min.(mu_TE, mu_TC))
+end
+
+# ╔═╡ 264b37bb-e014-466b-8620-75c15af997fc
+md"""
+The best configuration according to this rule is plotted below.
+"""
 
 # ╔═╡ 02204c58-53d7-46bc-8c18-a2a2fe0b6a92
 begin
@@ -133,11 +177,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 
 [compat]
 Ipopt = "~1.10.3"
 JuMP = "~1.25.0"
 Plots = "~1.40.13"
+Suppressor = "~0.2.8"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -146,7 +192,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "a2137b4235ef9a365647a86bdaf64ab140aea480"
+project_hash = "a9bb903e32c9aaabb150a567342a13cc01303a1f"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1054,6 +1100,12 @@ deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
 
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6dbb5b635c5437c68c28c2ac9e39b87138f37c0a"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.8"
+
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -1411,13 +1463,19 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─ebc5bf7b-3782-4828-a2e1-e6dc74d860e7
 # ╠═53b995b4-364e-11f0-2aed-795dcf37737e
+# ╟─fd176c82-a0af-475c-b45d-5018fa268a5c
 # ╠═7d73254a-9686-40a1-863f-cf0e7d4fde05
 # ╠═aa0f2690-425d-433a-8d21-53d84f19b45f
 # ╠═91cbc480-619c-4617-a1a9-d38f31962951
 # ╠═d3b68954-42f4-45f4-91af-a9248d4c81db
 # ╠═fdd0379b-5f81-470e-89e6-f182f1f61523
-# ╠═339f52c5-f4bf-44e3-8533-8d4e53d39b48
+# ╟─d92ba439-5a30-4a55-b0b4-1b42c9ce1231
+# ╠═7a872444-11f0-42f3-b06c-bebe7376dbf2
+# ╟─c1a142bd-cfcf-4512-952c-89ab196d78e1
+# ╠═1c9b4324-edd4-4864-939b-78cf48489fe6
+# ╟─264b37bb-e014-466b-8620-75c15af997fc
 # ╠═02204c58-53d7-46bc-8c18-a2a2fe0b6a92
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
