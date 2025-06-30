@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.8
+# v0.20.13
 
 using Markdown
 using InteractiveUtils
@@ -9,11 +9,12 @@ begin
 	using JuMP
 	using Ipopt
 	using Plots
+	using Suppressor
 end;
 
 # ╔═╡ b1ac8da4-34a8-11f0-0887-4306d2365014
 md"""
-# Thermal Unit Environmental Dispatch
+# Thermal unit environmental dispatch
 
 In this notebook we consider the environmental pollution produced by the thermal power plants additionally to their cost. Since the amount of pollution depends on the fuel type we introduce additional parameters to account for that. The total emission produced by thermal unit `i` is modelled as
 ```
@@ -96,7 +97,7 @@ function SolveED(load)
     model, vars = MakeBaseModel(load)
     (P, OF, TE, TC) = vars
     @objective(model, Min, TC)
-    optimize!(model)
+    @suppress_out optimize!(model)
     return vars
 end;
 
@@ -113,7 +114,7 @@ function SolveEND(load)
     model, vars = MakeBaseModel(load)
     (P, OF, TE, TC) = vars
     @objective(model, Min, TE)
-    optimize!(model)
+    @suppress_out optimize!(model)
     return vars
 end;
 
@@ -131,7 +132,7 @@ function SolvePENALTY(load)
     model, vars = MakeBaseModel(load)
     (P, OF, TE, TC) = vars
     @objective(model, Min, OF)
-    optimize!(model)
+    @suppress_out optimize!(model)
     return vars
 end;
 
@@ -152,7 +153,7 @@ function SolveLIMIT(load, limit)
     (P, OF, TE, TC) = vars
     @objective(model, Min, TC)
     @constraint(model, TE <= limit)
-    optimize!(model)
+    @suppress_out optimize!(model)
     return vars
 end;
 
@@ -265,11 +266,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 
 [compat]
 Ipopt = "~1.10.3"
 JuMP = "~1.25.0"
 Plots = "~1.40.13"
+Suppressor = "~0.2.8"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -278,7 +281,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "a2137b4235ef9a365647a86bdaf64ab140aea480"
+project_hash = "a9bb903e32c9aaabb150a567342a13cc01303a1f"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1185,6 +1188,12 @@ version = "1.11.0"
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.7.0+0"
+
+[[deps.Suppressor]]
+deps = ["Logging"]
+git-tree-sha1 = "6dbb5b635c5437c68c28c2ac9e39b87138f37c0a"
+uuid = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+version = "0.2.8"
 
 [[deps.TOML]]
 deps = ["Dates"]
