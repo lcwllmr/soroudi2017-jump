@@ -16,11 +16,16 @@ end;
 md"""
 # Energy storage in dynamic economic dispatch
 
-"""
+We now integrate energy storage systems into our existing models.
+First, we treat the case of standard DED.
+We will consider a very simple generic storage system which introduces the following new concepts:
 
-# ╔═╡ 2aeee52e-5dcc-4e4c-b778-7b8f85e54daa
-md"""
-The new parameters in this setting are said ramp-up/ramp-down rate limits and the varying demand over time.
+- State of charge (SOC): quantifies how much energy is currently stored,
+- charge/discharge rates: minimal and maximal rates at which the system can deliver and store energy,
+- charge/discharge efficieny: represents the loss that comes with converting the particular form of energy from/to electricity.
+
+All new relationships are linear and can be integrated quite easily.
+See the model definition below for explanations.
 """
 
 # ╔═╡ 89162f8c-34c9-11f0-0c62-33f6a61c4dcc
@@ -44,10 +49,10 @@ begin
 		754, 700, 686, 720, 714, 761,
 		727, 714, 618, 584, 578, 544] # unit: MW
 
-	# NEW: 
-	SOC_max = 300  # unit: MW
+	# NEW: state of charge
+	SOC_max = 300  # unit: MWh
 	SOC_min = 0.2 * SOC_max
-	SOC0 = 100 # initial and terminal charge
+	SOC0 = 100 # initial and planned terminal charge
 	
 	# NEW: minimum/maximum (dis)charge rates for the storage units
 	Pd_min = 0.0 # unit: MW
@@ -55,15 +60,10 @@ begin
 	Pc_min = 0.0
 	Pc_max = 0.2 * SOC_max
 
-	# NEW: (discharge) efficiency
+	# NEW: (dis)charge efficiency
 	eta_c = 0.95 # percentage
 	eta_d = 0.9
 end;
-
-# ╔═╡ f6090108-cef4-41af-8c86-7934e35b9f55
-md"""
-To understand the demand, we plot it just to observe that the peak happens during the day and that both rise and decline are quite rapid.
-"""
 
 # ╔═╡ 39d079c9-48fa-467d-84de-ba7ca26b61da
 function MakeESSInDEDModel()
@@ -72,19 +72,33 @@ function MakeESSInDEDModel()
 	set_attribute(model, "print_level", 0)
 
     @variable(model, P_min[i] <= P[i=1:4, t=1:24] <= P_max[i])
+	@constraint(model, RUcon[i=1:4, t=2:24], P[i,t] - P[i,t-1] <= RU[i])
+	@constraint(model, RDcon[i=1:4, t=2:24], P[i,t-1] - P[i,t] <= RD[i])
+
+	# introduce new variables and restrict by technical lower and upper bounds
 	@variable(model, SOC_min <= SOC[t=1:24] <= SOC_max)
 	@variable(model, Pd_min <= Pd[t=1:24] <= Pd_max)
 	@variable(model, Pc_min <= Pc[t=1:24] <= Pc_max)
-	@constraint(model, RUcon[i=1:4, t=2:24], P[i,t] - P[i,t-1] <= RU[i])
-	@constraint(model, RDcon[i=1:4, t=2:24], P[i,t-1] - P[i,t] <= RD[i])
+
+	# we start from SOC_0 and then add the current charge and discharge amounts multiplied by efficiency factors
 	@constraint(model, chargeConHour1, SOC[1] == SOC0 + Pc[1] * eta_c - Pd[1] / eta_d)
 	@constraint(model, chargeCon[t=2:24], SOC[t] == SOC[t-1] + Pc[t] * eta_c - Pd[t] / eta_d)
+	
+	# this is the planned SOC that we need for the next day
 	@constraint(model, terminalSOCcon, SOC[24] == SOC0)
+
+	# energy production is increased by discharge rate and load must be increased by charge rate
 	@constraint(model, Lcon[t=1:24], sum(P[i,t] for i in 1:4) + Pd[t] >= L[t] + Pc[t])
-    
+
+	# we don't consider additional costs that come with energy storage here
 	TC = sum(a[i] * P[i,t]^2 + b[i] * P[i,t] + c[i] for i in 1:4, t in 1:24)
     return model, (P, SOC, Pd, Pc, TC)
 end;
+
+# ╔═╡ a5f3e785-56ea-4186-96ec-0d9891567243
+md"""
+We inspect the thermal unit generation levels, compare how the state of charge compares to thermal power generation and load, and lastly check the charge and discharge rates individually.
+"""
 
 # ╔═╡ e5e09112-53e0-4ed0-a0cb-27a666214f2d
 begin
@@ -98,9 +112,6 @@ begin
     	label=["P1" "P2" "P3" "P4"])
 end
 
-# ╔═╡ a29f075d-7430-4abe-840f-881195b58ed4
-value(TC)
-
 # ╔═╡ 820846b2-ced7-473a-9729-ffcac156106f
 begin
 	Ptotal = sum(value.(P), dims=1)[:]
@@ -113,6 +124,24 @@ end
 bar(1:24, [value.(Pd), value.(Pc)], 
    xlabel="Hour", ylabel="Rate (MW)", 
    label=["discharge" "charge"])
+
+# ╔═╡ 992d9564-9f2f-4bca-a04c-a87d9d5ef426
+md"""
+We see that the presence of a storage system flattens out the generation levels especially during the middle of the day with highest demand.
+It recharges in the early morning, so that it has enough power for later.
+
+Let's see how integrating energy storage changes the total cost of the system.
+"""
+
+# ╔═╡ 1cec3932-5e40-4135-88f7-095b9342be94
+value(TC)
+
+# ╔═╡ 008daf2d-467e-45fb-a1c1-22aaff56340a
+md"""
+In comparison, the standard DED system in [norebook 3](https://lcwllmr.github.io/soroudi2017-jump/03-dynamic-economic-dispatch.html) had a total cost of 647964$, which means we save a bit more than 2000\$ per day.
+This is less than I expected, but you would probably see more savings if you also considered environmental costs.
+Next, let's assess the impact on wind-integrated DED in the next notebook.
+"""
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1406,15 +1435,16 @@ version = "1.8.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═7694a499-84ac-4d60-9667-33dcf3a973ed
+# ╟─7694a499-84ac-4d60-9667-33dcf3a973ed
 # ╠═961a9d66-ac01-4116-bb23-c374b279be58
-# ╟─2aeee52e-5dcc-4e4c-b778-7b8f85e54daa
 # ╠═89162f8c-34c9-11f0-0c62-33f6a61c4dcc
-# ╟─f6090108-cef4-41af-8c86-7934e35b9f55
 # ╠═39d079c9-48fa-467d-84de-ba7ca26b61da
+# ╟─a5f3e785-56ea-4186-96ec-0d9891567243
 # ╠═e5e09112-53e0-4ed0-a0cb-27a666214f2d
-# ╠═a29f075d-7430-4abe-840f-881195b58ed4
 # ╠═820846b2-ced7-473a-9729-ffcac156106f
 # ╠═5b3687b5-4366-4943-92d1-a5d0f48aafb8
+# ╟─992d9564-9f2f-4bca-a04c-a87d9d5ef426
+# ╠═1cec3932-5e40-4135-88f7-095b9342be94
+# ╟─008daf2d-467e-45fb-a1c1-22aaff56340a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
