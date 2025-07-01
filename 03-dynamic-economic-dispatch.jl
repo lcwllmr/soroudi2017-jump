@@ -63,7 +63,6 @@ To understand the demand, we plot it just to observe that the peak happens durin
 # ╔═╡ fcce9aaa-7c0b-42b5-ad1e-361f77764bd8
 begin
 	plot(1:24, L, 
-    	title="Demand", 
     	xlabel="Time (h)", ylabel="Demand (MW)",
 		legend=false)
 end
@@ -86,7 +85,6 @@ function MakeCostBasedDEDModel(ramp_scale = 1.0)
     
 	TC = sum(a[i] * P[i,t]^2 + b[i] * P[i,t] + c[i] for i in 1:4, t in 1:24)
     TE = sum(d[i] * P[i,t]^2 + e[i] * P[i,t] + f[i] for i in 1:4, t in 1:24)
-    #OF = TC + C_e * TE
     return model, (P, TC, TE)
 end;
 
@@ -101,6 +99,14 @@ begin
     	xlabel="Time (h)", ylabel="Generated power (MW)", 
     	label=["P1" "P2" "P3" "P4"])
 end
+
+# ╔═╡ a541319d-7e48-49d3-9523-5195eedbabd0
+md"""
+For comparison with energy storage integration later, we also record the total cost of the system.
+"""
+
+# ╔═╡ 9e1dd501-de00-46bc-839d-c43b398edc1e
+value(TC)
 
 # ╔═╡ 51c6ef7f-720f-472a-94ff-c71e0375fd8a
 md"""
@@ -120,7 +126,7 @@ begin
 		scale = (i - 1) * 0.02 + 0.6
 		scales[i] = scale
 		
-		model, (_, TC, TE) = MakeCostBasedDEDModel(scale);
+		local model, (_, TC, TE) = MakeCostBasedDEDModel(scale);
 		@objective(model, Min, TC)
 		@suppress_out optimize!(model)
 
@@ -1445,6 +1451,8 @@ version = "1.8.1+0"
 # ╠═fcce9aaa-7c0b-42b5-ad1e-361f77764bd8
 # ╠═39d079c9-48fa-467d-84de-ba7ca26b61da
 # ╠═e5e09112-53e0-4ed0-a0cb-27a666214f2d
+# ╟─a541319d-7e48-49d3-9523-5195eedbabd0
+# ╠═9e1dd501-de00-46bc-839d-c43b398edc1e
 # ╟─51c6ef7f-720f-472a-94ff-c71e0375fd8a
 # ╠═0e2d61aa-1e61-4925-895d-fcbd1896e035
 # ╠═8ef39681-efec-4790-92c0-900f56701347
