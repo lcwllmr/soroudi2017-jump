@@ -22,7 +22,7 @@ The links each lead to a rendered web version of the respective notebook.
 4. [Multi-objective cost-emission minimization](https://lcwllmr.github.io/soroudi2017-jump/04-multi-objective-cost-emission-minimization.html): Section 4.1.2
 5. [Wind-integrated DED](https://lcwllmr.github.io/soroudi2017-jump/05-wind-integrated-ded.html): Section 4.1.3
 6. [Energy storage system (ESS) operation in DED](https://lcwllmr.github.io/soroudi2017-jump/06-energy-storage-in-ded.html): Section 7.2.1
-7. `[WIP]` ESS operation in wind-integrated DED: Section 7.2.2
+7. [ESS operation in wind-integrated DED](https://lcwllmr.github.io/soroudi2017-jump/07-ess-in-wind-ded.html): Section 7.2.2
 
 ## How the repo works
 
@@ -36,4 +36,4 @@ All Pluto notebooks are developed locally and then converted to HTML using the f
   ```
   and open the browser at <http://localhost:1234> to access Pluto's UI and work with the notebooks.
 - After you are happy with the changes, you simply push to `main` and then, if any of the `*.jl` or `README.md` were changed, a GitHub action should be triggered automatically.
-  This will export this readme file and all notebooks as HTML pages and publish them to GitHub pages at <https://lcwllmr.github.io/soroudi2017-jump>.
+  This will export this readme file and all notebooks as HTML pages and publish them to GitHub pages.
