@@ -134,6 +134,14 @@ begin
 		label=["Demand" "Thermal power" "Wind power"])
 end
 
+# ╔═╡ 76b37a01-aaee-40ee-8b8f-46e96d657bc0
+md"""
+We record the total cost of the system for later in order to compare to when we integrate energy storage systems.
+"""
+
+# ╔═╡ 99f74eb5-5872-408e-9d5f-c6f3d0350548
+value(TC) + value(WC)
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1439,5 +1447,7 @@ version = "1.8.1+0"
 # ╠═8ec9ec2b-e449-468f-a865-3dc00a8f96e8
 # ╟─01df8991-a707-4d88-a82f-4dfa1823f99a
 # ╠═4e02568d-f534-4456-bdc4-4c46e7faf127
+# ╟─76b37a01-aaee-40ee-8b8f-46e96d657bc0
+# ╠═99f74eb5-5872-408e-9d5f-c6f3d0350548
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
